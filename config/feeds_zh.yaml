@@ -1,0 +1,175 @@
+# 国内 AI / 科技信息源
+#
+# tier 分级（决定基础分，直接影响排序，见 tier_base_score）：
+#   1 = AI 垂类媒体、厂商官方一手源
+#   2 = 科技媒体（AI 内容占比中等）
+#   3 = 泛科技聚合（量大、噪音多，基础分故意低于默认 15，避免淹没观点类内容）
+#
+# filter_mode：
+#   loose  = 不过滤（源本身是 AI 垂类时使用）
+#   strict = 标题或摘要必须命中 ai_keywords 才收录（泛科技源必须用）
+#
+# enabled: false 可单独关停失效源，不影响其他源。
+# 实测记录见 docs/zh-sources.md。
+
+defaults:
+  filter_mode: strict
+  filter_scope: title            # 只按标题判定是否 AI 相关：摘要太长，常顺带提一句 AI 导致误收
+  summary_chars: 600             # 国内源摘要常是全文，截断以控制 LLM 输入长度
+  max_items_per_source: 8        # 每源最多收录条数，防止 IT之家 这类大源灌爆
+  max_per_source_in_result: 4    # 排序后每源最多保留条数，保证日报来源多样性
+  max_total_items: 90            # 预处理后全局上限，控制 LLM 输入长度
+  # 语言配额（全局策略，同样作用于海外源）：先按比例预留坑位，再按分数补位。
+  # 不设则纯按分数排序 —— 国内源数量多，会把海外内容挤没。
+  lang_quota:
+    zh: 0.6
+    en: 0.4
+  # 来源类型配额：X 推文条数多且互动量高，不设上限会把新闻稿挤下去。
+  max_type_ratio:
+    twitter: 0.3
+
+tier_base_score:
+  1: 25
+  2: 18
+  3: 10
+
+# 国内源关键词白名单。ASCII 词按词边界匹配（"AI" 不会命中 "email"/"said"），
+# 中文词按子串匹配。
+ai_keywords:
+  - AI
+  - AIGC
+  - AGI
+  - LLM
+  - GPT
+  - ChatGPT
+  - Claude
+  - Gemini
+  - Copilot
+  - Cursor
+  - Sora
+  - Midjourney
+  - DeepSeek
+  - OpenAI
+  - Anthropic
+  - NVIDIA
+  - GPU
+  - TPU
+  - Transformer
+  - 人工智能
+  - 大模型
+  - 大语言模型
+  - 语言模型
+  - 多模态
+  - 机器学习
+  - 深度学习
+  - 神经网络
+  - 智能体
+  - 具身智能
+  - 生成式
+  - 算力
+  - 芯片
+  - 训练
+  - 推理
+  - 微调
+  - 开源模型
+  - 模型开源
+  - 智能驾驶
+  - 自动驾驶
+  - 人形机器人
+  - 机器人
+  - 豆包
+  - 通义
+  - 千问
+  - 文心
+  - 混元
+  - 星火
+  - Kimi
+  - 智谱
+  - 月之暗面
+  - MiniMax
+  - 阶跃星辰
+  - 百川
+  - 商汤
+  - 阿里云
+  - 火山引擎
+
+rss_feeds:
+  # ---------- tier 1：AI 垂类 / 官方一手 ----------
+  - name: 量子位
+    rss: https://www.qbitai.com/feed
+    tier: 1
+    lang: zh
+    filter_mode: loose
+
+  - name: 雷锋网
+    rss: https://www.leiphone.com/feed
+    tier: 2
+    lang: zh
+
+  - name: Qwen 官方博客
+    rss: https://qwenlm.github.io/blog/index.xml
+    tier: 1
+    lang: zh
+    filter_mode: loose
+    max_items: 3                # 官方博客更新慢，避免旧文占位
+
+  # ---------- tier 2：科技媒体 ----------
+  - name: 极客公园
+    rss: https://www.geekpark.net/rss
+    tier: 2
+    lang: zh
+
+  - name: InfoQ 中文
+    rss: https://www.infoq.cn/feed
+    tier: 2
+    lang: zh
+
+  - name: 爱范儿
+    rss: https://www.ifanr.com/feed
+    tier: 2
+    lang: zh
+
+  - name: 钛媒体
+    rss: https://www.tmtpost.com/rss.xml
+    tier: 2
+    lang: zh
+
+  - name: 虎嗅
+    rss: https://rsshub.rssforever.com/huxiu/article
+    tier: 2
+    lang: zh
+    note: "官方 RSS 被 WAF 拦截，走 RSSHub 公有镜像；镜像失效时改自建实例"
+
+  - name: 36氪
+    rss: https://rsshub.rssforever.com/36kr/newsflashes
+    tier: 2
+    lang: zh
+    note: "官方 /feed 已废；快讯混有大量股市行情，靠 strict 过滤"
+
+  # ---------- tier 3：泛科技聚合 ----------
+  - name: IT之家
+    rss: https://www.ithome.com/rss/
+    tier: 3
+    lang: zh
+
+  - name: 开源中国
+    rss: https://www.oschina.net/news/rss
+    tier: 3
+    lang: zh
+
+  - name: 掘金
+    rss: https://juejin.cn/rss
+    tier: 3
+    lang: zh
+
+  - name: Solidot
+    rss: https://www.solidot.org/index.rss
+    tier: 3
+    lang: zh
+
+  - name: cnBeta
+    rss: https://www.cnbeta.com.tw/backend.php
+    tier: 3
+    lang: zh
+    enabled: false              # 150 条/次且噪音最大，默认关闭；需要时改 true
+    max_items: 5

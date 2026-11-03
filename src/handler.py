@@ -20,12 +20,53 @@ from src.processor.content_filter import check_content, filter_content
 from src.publisher import active_publishers
 
 
+def _env_flag(name, default=False):
+    """Read a boolean env var.
+
+    Unset *or* empty falls back to ``default`` — GitHub Actions renders an
+    undefined ``vars.X`` as an empty string rather than omitting it, so
+    ``os.getenv(name, "1")`` would silently keep the flag off in CI.
+    """
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return default
+    return raw.strip().lower() not in ("0", "false", "no", "off")
+
+
 def _collect_twitter_if_configured(hours):
-    if not (os.getenv("X_AUTH_TOKEN") and os.getenv("X_CT0")):
+    if not ((os.getenv("X_AUTH_TOKEN") or "").strip() and (os.getenv("X_CT0") or "").strip()):
         print("  Skipping Twitter (X_AUTH_TOKEN / X_CT0 not set)")
         return []
     from src.collectors.twitter import collect_twitter
-    return collect_twitter(hours=hours)
+
+    try:
+        return collect_twitter(hours=hours)
+    except Exception as e:
+        # A broken cookie or a blocked runner IP must not kill the whole run.
+        print(f"  Twitter collection failed, continuing without it: {e}")
+        return []
+
+
+def _collect_zh_if_enabled(hours):
+    """Collect domestic sources (on by default; set ENABLE_ZH_SOURCES=0 to skip).
+
+    Returns the collected items plus the config's ``defaults`` block so the
+    preprocessing step can honour ``max_total_items``.
+    """
+    if not _env_flag("ENABLE_ZH_SOURCES", default=True):
+        print("  Skipping domestic sources (ENABLE_ZH_SOURCES=0)")
+        return [], {}
+
+    config_path = "config/feeds_zh.yaml"
+    if not os.path.isfile(config_path):
+        print(f"  Skipping domestic sources ({config_path} not found)")
+        return [], {}
+
+    from src.collectors.rss import collect_rss as _collect
+
+    with open(config_path, encoding="utf-8") as f:
+        limits = (yaml.safe_load(f) or {}).get("defaults") or {}
+    return _collect(hours=hours, config_path=config_path), limits
 
 
 def _generate_audio_if_configured(digest, date_str):
@@ -53,15 +94,19 @@ def run(hours=24, processed_path=None):
         with open(processed_path, encoding="utf-8") as f:
             processed_items = json.load(f)
     else:
-        print("[1/5] Collecting RSS feeds...")
+        print("[1/6] Collecting RSS feeds...")
         rss_items = collect_rss(hours=hours)
         print(f"  Total RSS items: {len(rss_items)}\n")
 
-        print("[2/5] Collecting X/Twitter...")
+        print("[2/6] Collecting domestic sources...")
+        zh_items, zh_limits = _collect_zh_if_enabled(hours)
+        print(f"  Total domestic items: {len(zh_items)}\n")
+
+        print("[3/6] Collecting X/Twitter...")
         twitter_items = _collect_twitter_if_configured(hours)
         print(f"  Total Twitter items: {len(twitter_items)}\n")
 
-        all_items = rss_items + twitter_items
+        all_items = rss_items + zh_items + twitter_items
         print(f"Total items collected: {len(all_items)}\n")
 
         if not all_items:
@@ -74,23 +119,38 @@ def run(hours=24, processed_path=None):
             json.dump(all_items, f, ensure_ascii=False, indent=2)
         print(f"Raw data saved to {raw_path}")
 
-        print("\n[3/5] Preprocessing (score → dedup → classify → sort)...")
+        print("\n[4/6] Preprocessing (score → dedup → classify → sort)...")
         with open("config/x_accounts.yaml") as f:
             accounts_config = yaml.safe_load(f)
 
-        processed_items, stats = preprocess(all_items, accounts_config)
+        processed_items, stats = preprocess(
+            all_items,
+            accounts_config,
+            max_total=zh_limits.get("max_total_items"),
+            max_per_source=zh_limits.get("max_per_source_in_result"),
+            lang_quota=zh_limits.get("lang_quota"),
+            max_type_ratio=zh_limits.get("max_type_ratio"),
+        )
         print(
             f"  Original: {stats['original']} → After dedup: {stats['after_dedup']} "
             f"(removed {stats['removed']}) → After filter: {stats['after_filter']} "
             f"(filtered {stats['filtered']})"
         )
+        if stats.get("source_capped"):
+            print(f"  Capped {stats['source_capped']} items to keep source diversity")
+        if stats.get("lang_dropped"):
+            print(f"  Dropped {stats['lang_dropped']} items to balance zh/en coverage")
+        if stats.get("type_capped"):
+            print(f"  Capped {stats['type_capped']} tweets to keep the digest news-led")
+        if stats.get("truncated"):
+            print(f"  Truncated {stats['truncated']} low-score items to fit the LLM context window")
 
         processed_path = f"data/processed-{date_str}.json"
         with open(processed_path, "w") as f:
             json.dump(processed_items, f, ensure_ascii=False, indent=2)
         print(f"  Processed data saved to {processed_path}")
 
-    print(f"\n[4/5] Generating digest with LLM...")
+    print(f"\n[5/6] Generating digest with LLM...")
     digest_path = os.path.join("data", f"digest-{date_str}.md")
     digest = generate_digest(processed_items, date_str, output_path=digest_path)
 
@@ -102,7 +162,7 @@ def run(hours=24, processed_path=None):
             digest = filter_content(digest)
             filtered_info = ", ".join(flagged)
 
-    print(f"\n[4.5/5] Generating podcast audio...")
+    print(f"\n[5.5/6] Generating podcast audio...")
     audio_path = _generate_audio_if_configured(digest, date_str)
     if audio_path:
         print(f"  Audio saved to {audio_path}")
@@ -111,7 +171,7 @@ def run(hours=24, processed_path=None):
     names = [n.strip() for n in publishers_env.split(",")] if publishers_env else None
     publishers = active_publishers(names)
 
-    print(f"\n[5/5] Publishing via: {[p.NAME for p in publishers]}")
+    print(f"\n[6/6] Publishing via: {[p.NAME for p in publishers]}")
     for pub in publishers:
         try:
             result = pub.publish(

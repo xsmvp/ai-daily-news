@@ -54,10 +54,18 @@ Want a different schedule? Edit the cron line in `daily.yml` (e.g. `'0 22 * * *'
 ## Configure sources
 
 - `config/feeds.yaml` — RSS feeds. Drop in any feed URL.
+- `config/feeds_zh.yaml` — domestic Chinese AI/tech sources, on by default; set `ENABLE_ZH_SOURCES=0` to skip. Supports `tier`-based weighting, `filter_mode: strict` keyword filtering, and per-source `enabled` switches. Verified source list: `docs/zh-sources.md`.
 - `config/x_accounts.yaml` — X/Twitter handles with `weight: high|medium`. High-weight accounts get a 3× score multiplier.
 - `config/sensitive_words.yaml` — Optional content filter (off by default; set `ENABLE_CONTENT_FILTER=1` to turn on; useful when republishing to Chinese platforms).
 
-X collection needs `X_AUTH_TOKEN` and `X_CT0` cookies (grab them from your browser dev tools). Without these set, the pipeline runs RSS-only.
+X collection needs `X_AUTH_TOKEN` and `X_CT0` cookies (grab them from your browser dev tools). Without these set, the pipeline runs RSS-only. Cookie extraction, GitHub Actions secrets, and the two twikit/X incompatibilities we patch are documented in `docs/x-setup.md`.
+
+Check one source group without spending LLM tokens:
+
+```bash
+python scripts/collect_zh.py --source 量子位   # domestic feeds
+python scripts/collect_x.py --handle karpathy  # one X account
+```
 
 ## Configure publishers
 

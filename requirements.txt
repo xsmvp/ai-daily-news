@@ -1,7 +1,9 @@
 feedparser
 requests
 pyyaml
-twikit
+# Pinned: src/collectors/twikit_patch.py monkeypatches ClientTransaction internals
+twikit==2.3.3
+httpx
 python-dotenv
 openai
 markdown

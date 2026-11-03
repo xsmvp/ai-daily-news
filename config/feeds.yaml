@@ -1,24 +1,127 @@
-# RSS feeds that are verified working
-rss_feeds:
-  - name: "The Keyword (Google Blog)"
-    rss: "https://blog.google/rss/"
+# Overseas AI feeds — verified working as of 2026-11-03.
+#
+# tier feeds into the same score buckets as config/feeds_zh.yaml
+# (1 = official first-party, 2 = AI media / practitioner, 3 = broad tech),
+# so both languages compete on one scale instead of overseas always
+# sitting at the default 15 and losing to domestic tier-1/2 items.
+defaults:
+  filter_mode: loose            # these feeds are already AI-specific
+  filter_scope: title
+  max_items_per_source: 8
+  summary_chars: 1500
 
-  - name: "Peter Yang"
-    rss: "https://creatoreconomy.so/feed"
+tier_base_score:
+  1: 25
+  2: 18
+  3: 12
+
+# Needed for the few broad feeds below (MIT Tech Review is the whole magazine,
+# The Keyword is all of Google, OpenAI's news feed mixes in customer stories).
+# ASCII terms match on word boundaries, so "AI" never hits "said"/"email".
+ai_keywords:
+  - AI
+  - AGI
+  - LLM
+  - GPT
+  - ChatGPT
+  - Claude
+  - Gemini
+  - Copilot
+  - Sora
+  - Midjourney
+  - DeepSeek
+  - OpenAI
+  - Anthropic
+  - NVIDIA
+  - GPU
+  - TPU
+  - artificial intelligence
+  - machine learning
+  - neural
+  - chatbot
+  - multimodal
+  - foundation model
+  - reasoning model
+  - inference
+  - fine-tune
+  - benchmark
+  - robotics
+  - robot
+  - agentic
+  - model release
+
+rss_feeds:
+  # ---------- tier 1: first-party announcements ----------
+  # openai.com/blog/rss.xml 302s to /news/rss.xml, which also carries customer
+  # stories and security posts — hence strict title filtering, not tier 1.
+  - name: "OpenAI Official Blog"
+    rss: "https://openai.com/blog/rss.xml"
+    tier: 2
+    lang: en
+    filter_mode: strict
+
+  # ---------- tier 2: AI media / practitioners ----------
+  - name: "The Decoder"
+    rss: "https://the-decoder.com/feed/"
+    tier: 2
+    lang: en
 
   - name: "The Verge AI"
     rss: "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml"
+    tier: 2
+    lang: en
 
   - name: "TechCrunch AI"
     rss: "https://techcrunch.com/category/artificial-intelligence/feed/"
+    tier: 2
+    lang: en
 
   - name: "Ars Technica AI"
     rss: "https://arstechnica.com/ai/feed/"
+    tier: 2
+    lang: en
 
   - name: "MIT Technology Review"
     rss: "https://www.technologyreview.com/feed/"
+    tier: 2
+    lang: en
+    filter_mode: strict         # whole magazine, not just AI
 
-# These need Gmail integration (no public RSS)
+  - name: "Simon Willison"
+    rss: "https://simonwillison.net/atom/everything/"
+    tier: 2
+    lang: en
+
+  - name: "Latent Space"
+    rss: "https://www.latent.space/feed"
+    tier: 2
+    lang: en
+
+  - name: "Hugging Face Blog"
+    rss: "https://huggingface.co/blog/feed.xml"
+    tier: 2
+    lang: en
+
+  - name: "Peter Yang"
+    rss: "https://creatoreconomy.so/feed"
+    tier: 2
+    lang: en
+
+  # ---------- tier 3: broad tech ----------
+  - name: "The Keyword (Google Blog)"
+    rss: "https://blog.google/rss/"
+    tier: 3
+    lang: en
+    filter_mode: strict         # all of Google, not just AI
+
+  - name: "Wired AI"
+    rss: "https://www.wired.com/feed/tag/ai/latest/rss"
+    tier: 3
+    lang: en
+
+# These need Gmail integration (no public RSS). Verified 2026-11-03:
+# Anthropic news, Ben's Bites, The Batch and AI Valley have no public feed
+# either, so they stay here until the Gmail path exists.
 # TODO: Phase 2 - Gmail API integration
 gmail_newsletters:
   - name: "Ben's Bites"

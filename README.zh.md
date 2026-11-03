@@ -56,10 +56,18 @@ docker compose up
 ## 配置信源
 
 - `config/feeds.yaml` — RSS 源，加任意 feed URL 即可。
+- `config/feeds_zh.yaml` — 国内 AI/科技信源，默认开启，`ENABLE_ZH_SOURCES=0` 关闭。支持 `tier` 分级权重、`filter_mode: strict` 关键词过滤、`enabled` 单独开关。各源实测可用性见 `docs/zh-sources.md`。
 - `config/x_accounts.yaml` — X/Twitter 账号，`weight: high|medium`，high 权重账号得分 ×3。
 - `config/sensitive_words.yaml` — 可选的内容过滤（默认关闭，`ENABLE_CONTENT_FILTER=1` 打开；适合发到国内平台）。
 
-X 抓取需要 `X_AUTH_TOKEN` 和 `X_CT0` 两个 cookies（浏览器开发者工具里复制）。不配的话流水线只跑 RSS。
+X 抓取需要 `X_AUTH_TOKEN` 和 `X_CT0` 两个 cookies（浏览器开发者工具里复制）。不配的话流水线只跑 RSS。取 cookie、GitHub Actions 里怎么配、以及 twikit 与 X 的两处不兼容如何修补，见 `docs/x-setup.md`。
+
+单独验证某一路信源（不花 LLM token）：
+
+```bash
+python scripts/collect_zh.py --source 量子位   # 国内源
+python scripts/collect_x.py --handle karpathy  # 单个 X 账号
+```
 
 ## 配置发布渠道
 

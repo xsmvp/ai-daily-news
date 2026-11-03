@@ -3,23 +3,67 @@ on:
   schedule:
     - cron: '0 0 * * *'  # UTC 00:00
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'full = collect + digest, x_check = only test X cookies'
+        type: choice
+        options: [full, x_check]
+        default: full
+
+# Never let a manual run and the cron job overlap.
+concurrency:
+  group: ai-daily-digest
+  cancel-in-progress: false
+
 jobs:
   run:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - run: pip install -r requirements.txt
-      - run: python src/handler.py 24
+
+      # Printed only so a misconfigured secret is obvious in the log.
+      - name: Check X credentials
+        run: |
+          python -c "
+          import os
+          missing = []
+          for key in ('X_AUTH_TOKEN', 'X_CT0'):
+              val = (os.getenv(key) or '').strip()
+              print(f'{key}: {len(val)} chars' if val else f'{key}: MISSING')
+              if not val:
+                  missing.append(key)
+          if missing:
+              print('::warning title=X cookies missing::' + ', '.join(missing) + ' not set — X collection will be skipped')
+          "
+        env:
+          X_AUTH_TOKEN: ${{ secrets.X_AUTH_TOKEN }}
+          X_CT0: ${{ secrets.X_CT0 }}
+
+      # Credential check without spending LLM tokens.
+      - name: Test X cookies only
+        if: inputs.mode == 'x_check'
+        run: python scripts/collect_x.py --all
+        env:
+          X_AUTH_TOKEN: ${{ secrets.X_AUTH_TOKEN }}
+          X_CT0: ${{ secrets.X_CT0 }}
+          # Deliberately no PROXY_URL: GitHub runners sit in the US and reach
+          # x.com directly. An empty string would be treated as unset anyway.
+
+      - name: Build digest
+        if: inputs.mode != 'x_check'
+        run: python src/handler.py 24
         env:
           # LLM
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
           LLM_MODEL: ${{ secrets.LLM_MODEL }}
           DIGEST_LANG: ${{ vars.DIGEST_LANG }}
-          # Sources
+          # Sources (no PROXY_URL needed — runners are outside the GFW)
           X_AUTH_TOKEN: ${{ secrets.X_AUTH_TOKEN }}
           X_CT0: ${{ secrets.X_CT0 }}
           # Publishers
@@ -31,5 +75,18 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           # Optional
           ENABLE_CONTENT_FILTER: ${{ vars.ENABLE_CONTENT_FILTER }}
+          ENABLE_ZH_SOURCES: ${{ vars.ENABLE_ZH_SOURCES }}
           DISABLE_AUDIO: ${{ vars.DISABLE_AUDIO }}
           SERVERCHAN_KEY: ${{ secrets.SERVERCHAN_KEY }}
+
+      # data/ is gitignored and the runner is thrown away after the job, so the
+      # digest would be lost without either a publisher or this artifact.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: digest-${{ github.run_id }}
+          path: |
+            data/digest-*.md
+            data/processed-*.json
+          if-no-files-found: warn
+          retention-days: 30
